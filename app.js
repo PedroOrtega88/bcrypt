@@ -1,49 +1,38 @@
-//1. Configuración del Servidor y Sesión
+// 1. Configuración del Servidor y Sesión
 
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const session = require('express-session');
-const secret = require('express-session');
-const hashedSecret = require('express session');
-
 
 const app = express();
 const PORT = 3000;
 
-
 const users = [
   { id: 1, username: 'usuario1', password: 'contraseña1', name: 'Usuario Uno' },
   { id: 2, username: 'usuario2', password: 'contraseña2', name: 'Usuario Dos' },
-  { id: 1, username: 'usuario3', password: 'contraseña3', name: 'Usuario Uno' },
-  { id: 2, username: 'usuario4', password: 'contraseña4', name: 'Usuario Dos' },
+  { id: 3, username: 'usuario3', password: 'contraseña3', name: 'Usuario Tres' },
+  { id: 4, username: 'usuario4', password: 'contraseña4', name: 'Usuario Cuatro' },
 ];
 
-
-//- Middleware para manejar datos de formulario y JSON
+// Middleware para manejar datos de formulario y JSON
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-//- Configuración de sesión
+// Configuración de sesión
 
 app.use(
   session({
-    secret: 'secret', // Clave secreta para firmar el token (debería ser segura, preferiblemente generada con crypto)
+    secret: 'tu_clave_secreta', // Clave secreta para firmar el token (debería ser segura, preferiblemente generada con crypto)
     resave: false, // No guardar cambios en la sesión siempre, solo cuando se realice algún cambio
     saveUninitialized: true, // Se guarda la inicialización de la sesión
     cookie: { secure: false }, // Cambia a 'true' si estás utilizando HTTPS
   })
 );
 
-//- Express: Se importa y se configura para crear el servidor web.
-//- JWT: Se utiliza para generar y verificar tokens JWT.
-//- express-session: Se utiliza para manejar sesiones en Express.
+// Función de autorización
 
-
-// function autorizat
-
-
-function autorization(req, res, next) {
+function autorizacion(req, res, next) {
     if (req.session.token) {
           // Usuario autenticado, redirige al dashboard
           res.redirect('/dashboard');
@@ -53,12 +42,10 @@ function autorization(req, res, next) {
     }
 }
 
+// Página de Inicio
 
-
-
-//2 Página de Inicio
-app.get('/', autorization, (req, res) => {
-    const loginForm = `
+app.get('/', autorizacion, (req, res) => {
+    const formularioInicio = `
       <form action="/login" method="post">
         <label for="username">Usuario:</label>
         <input type="text" id="username" name="username" required><br>
@@ -71,28 +58,25 @@ app.get('/', autorization, (req, res) => {
       <a href="/dashboard">dashboard</a>
     `;
   
-    res.send(loginForm);
-  });
-//3. Generación de Tokens
+    res.send(formularioInicio);
+});
 
-//- Función para generar un token JWT utilizando la información del usuario.
+// Generación de Tokens
 
-function generateToken(user) {
-  return jwt.sign({ user: user.id }, 'tu_secreto_secreto', { expiresIn: '1h' });
+function generarToken(usuario) {
+  return jwt.sign({ usuario: usuario.id }, 'tu_clave_secreta', { expiresIn: '1h' });
 }
 
-//4. Ruta de Inicio de Sesión
-
-//- Ruta que maneja la autenticación del usuario, genera un token y lo almacena en la sesión.
+// Ruta de Inicio de Sesión
 
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
-  const user = users.find(
+  const usuario = users.find(
     (u) => u.username === username && u.password === password
   );
 
-  if (user) {
-    const token = generateToken(user);
+  if (usuario) {
+    const token = generarToken(usuario);
     req.session.token = token;
     res.redirect('/dashboard');
   } else {
@@ -100,59 +84,50 @@ app.post('/login', (req, res) => {
   }
 });
 
-//5. Verificación de Tokens
+// Verificación de Tokens
 
-//- Middleware que verifica la validez del token almacenado en la sesión.
-
-function verifyToken(req, res, next) {
+function verificarToken(req, res, next) {
   const token = req.session.token;
 
   if (!token) {
     return res.status(401).json({ message: 'Token no proporcionado' });
   }
 
-  jwt.verify(token, 'tu_secreto_secreto', (err, decoded) => {
+  jwt.verify(token, 'tu_clave_secreta', (err, decodificado) => {
     if (err) {
       return res
         .status(401)
         .json({ message: 'Token inválido', error: err.message });
     }
 
-    req.user = decoded.user;
+    req.usuario = decodificado.usuario;
     next();
   });
 }
 
+// Dashboard
 
+app.get('/dashboard', verificarToken, (req, res) => {
+  const idUsuario = req.usuario;
+  const usuario = users.find((u) => u.id === idUsuario);
 
-
-//6. Dashboard
-
-//- Ruta protegida que solo se puede acceder con un token válido. Muestra el panel de control con información del usuario.
-
-app.get('/dashboard', verifyToken, (req, res) => {
-  const userId = req.user;
-  const user = users.find((u) => u.id === userId);
-
-  if (user) {
+  if (usuario) {
     res.send(
-      ` <h1>Bienvenido, ${user.name}!</h1> <p>ID: ${user.id}</p> <p>Usuario: ${user.username}</p> <br> <form action="/logout" method="post"> <button type="submit">Cerrar sesión</button> </form> <a href="/">home</a> `
+      ` <h1>Bienvenido, ${usuario.name}!</h1> <p>ID: ${usuario.id}</p> <p>Usuario: ${usuario.username}</p> <br> <form action="/logout" method="post"> <button type="submit">Cerrar sesión</button> </form> <a href="/">Inicio</a> `
     );
   } else {
     res.status(401).json({ message: 'Usuario no encontrado' });
   }
 });
 
-//7. Cierre de Sesión
-
-//- Ruta que destruye la sesión y redirige al usuario a la página de inicio.
+// Cierre de Sesión
 
 app.post('/logout', (req, res) => {
   req.session.destroy();
   res.redirect('/');
 });
 
-//8. Iniciar el Servidor
+// Iniciar el Servidor
 
 app.listen(PORT, () => {
   console.log(`Servidor en http://localhost:${PORT}`);
